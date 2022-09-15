@@ -1,0 +1,447 @@
+背景:1.背景圖片Texture Type改Spite(2D and UI)
+     2.改攝影機座標
+     3.拉大圖片
+玩家:1.拉到場景
+     2.玩家圖片右鍵Create empty
+     3.玩家Order in Layer改成1
+     4.子彈圖片拉到場景
+     5.子彈Order in Layer改成2
+     6.Component->Physic 2D->polygon Collider 2D->is trigger打勾
+     7.Component->Physic 2D->RigidBody 2D->gravity scale改0
+     8.把子彈物件拉回素材區，然後刪除場景的子彈物件
+     9.匯入飛機搖桿圖片->Spite Mode->Multiple
+     10.點擊Spite Editor->Slice->Apply
+場景:1.場景UI->Image
+     2.Canvas->Canvas Scaler->x:1080 y:1920
+     3.Image->w:300 h:300->放入搖桿圖片
+遊戲開始後玩家會自動產生子彈，子彈5秒之後消失
+Play script:
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class player : MonoBehaviour
+{
+    [Header("子彈物件")]
+    public GameObject Bullet;
+    [Header("子彈生成位置1")]
+    public GameObject CreateObject1;
+    [Header("子彈生成位置2")]
+    public GameObject CreateObject2;
+    [Header("設定多少時間產生一顆子彈")]
+    public float SetTime;
+    [Header("發射子彈的聲音")]
+    public AudioSource ShootAudio;
+
+    [Header("玩家總血量")]
+    public float playerTotalHP;
+    [Header("傷害玩家血量")]
+    public float hurtPlayerHP;
+    float ScriptHP;
+    [Header("玩家血量血條")]
+    public Image playerHpBar;
+
+    [Header("遊戲結束UI")]
+    public GameObject GameOverObject;
+    // Start is called before the first frame update
+    void Start()
+    {
+        //InvokeRepeating(fuc名稱,第一次等待秒數,固定等待秒數)
+        InvokeRepeating("CreateBullet", SetTime, SetTime);
+        ScriptHP = playerTotalHP;
+        Time.timeScale = 1;
+    }
+    void CreateBullet()
+    {
+        Instantiate(Bullet, CreateObject1.transform.position, CreateObject1.transform.rotation);
+        Instantiate(Bullet, CreateObject2.transform.position, CreateObject2.transform.rotation);
+        ShootAudio.Play();
+    }
+    // Update is called once per frame
+    void Update()
+    {
+
+        //動態生成
+        //Instantiate(Bullet, CreateObject.transform.position, CreateObject.transform.rotation);
+    }
+    public void HurtPlayer()
+    {
+        ScriptHP -= hurtPlayerHP;
+        ScriptHP = Mathf.Clamp(ScriptHP, 0, playerTotalHP);
+        playerHpBar.fillAmount = ScriptHP / playerTotalHP;
+        if (ScriptHP <= 0)
+        {
+            GameOverObject.SetActive(true);
+            Time.timeScale = 0;
+        }
+    }
+    
+}
+
+GM script:
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class GM : MonoBehaviour
+{
+    public enum SelectDevice
+    {
+        Keyboard,
+        Mobile,
+        PCUI
+    }
+
+    [Header("選擇輸入裝置")]
+    public SelectDevice Select_Device;
+    [Header("飛機移動速度")]
+    public float Speed;
+    [Header("Player")]
+    public GameObject Player;
+    [Header("限制玩家移動位置")]
+    public float MinX, MaxX, MinY, MaxY;
+
+    [Header("多久產生一隻敵機")]
+    public float CreateTimer;
+    [Header("設定敵機出現的y位置數據")]
+    public float YPpos;
+    [Header("產生的敵機")]
+    public GameObject Enemy;
+
+    [Header("打死敵機的分數")]
+    public int AddScore;
+    public int TotalScore;
+
+    [Header("分數文字")]
+    public Text TotalScoreText;
+
+    bool IsJoystick, CanJoystick;
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        InvokeRepeating("CreateEnemy", CreateTimer, CreateTimer); 
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        switch (Select_Device)
+        {
+            #region 鍵盤
+            case SelectDevice.Keyboard:
+                /*if (Input.GetKey(KeyCode.A))
+                {
+                    //控制方向
+                    Player.transform.Translate(Vector3.left * Speed * Time.deltaTime);
+                }*/
+                //快速寫法
+                Player.transform.Translate(Input.GetAxis("Horizontal") * Speed * Time.deltaTime, Input.GetAxis("Vertical") * Speed * Time.deltaTime, 0);
+                break;
+            #endregion
+            #region 手機
+            case SelectDevice.Mobile:
+                Player.transform.Translate(Input.acceleration.x * Speed * Time.deltaTime, Input.acceleration.y* Speed * Time.deltaTime, 0);
+                break;
+            #endregion
+            #region PCUI
+            case SelectDevice.PCUI:
+                IsJoystick = true;
+                break;  
+            #endregion
+        }
+        Player.transform.position = new Vector3(Mathf.Clamp(Player.transform.position.x, MinX, MaxX), Mathf.Clamp(Player.transform.position.y, MinY, MaxY), Player.transform.position.z);
+    }
+
+    public void AddTotalScore()
+    {
+        TotalScore += AddScore;
+        TotalScoreText.text = "Score : " + TotalScore;
+    }
+
+    void CreateEnemy()
+    {
+        //設定敵機產出的位置
+        Vector3 CreatePosition = new Vector3(Random.Range(MinX, MaxX), YPpos, 0f);
+        //產出敵機
+        GameObject Prefab = Instantiate(Enemy, CreatePosition, transform.rotation) as GameObject;
+        Prefab.transform.eulerAngles = new Vector3(0, 0, 180);
+    }
+
+    public void IsUsingJoystick()
+    {
+        CanJoystick = true;
+    }
+
+    public void IsntUsingJoystick()
+    {
+        CanJoystick = false;
+    }
+
+    public void UsingJoystick(Vector3 pos)
+    {
+        if (CanJoystick && IsJoystick)
+        {
+            Player.transform.Translate(pos.x * Speed * Time.deltaTime, pos.y * Speed * Time.deltaTime, 0, Space.World);
+        }
+    }
+}
+Play Bullet:
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class bullet : MonoBehaviour
+{
+    [Header("子彈多久後自己消滅")]
+    public float DeleteTime;
+    [Header("移動速度")]
+    public float Speed;
+    [Header("爆炸聲音")]
+    public AudioSource BombAudio;
+    // Start is called before the first frame update
+    void Start()
+    {
+        Destroy(gameObject, DeleteTime);
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        transform.Translate(Vector3.up * Speed * Time.deltaTime);    
+    }
+
+    void OnTriggerEnter2D(Collider2D hit)
+    {
+        if(hit.GetComponent<Collider2D>().tag == "Enemy" && gameObject.tag == "PlayerBullet")
+        {
+            Camera.main.GetComponent<GM>().AddTotalScore();
+            BombAudio.Play();
+            Destroy(hit.gameObject);
+            Destroy(gameObject, 1f);
+        }
+        if (hit.GetComponent<Collider2D>().tag == "EnemyBullet" && gameObject.tag == "PlayerBullet")
+        {
+            Destroy(hit.gameObject);
+            Destroy(gameObject);
+        }
+        if (hit.GetComponent<Collider2D>().tag == "Player" && gameObject.tag == "EnemyBullet")
+        {
+            hit.GetComponent<player>().HurtPlayer();
+            Destroy(gameObject);
+        }
+    }
+}
+Enemy:
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class Enemy : MonoBehaviour
+{
+    [Header("敵機多久後自己消滅")]
+    public float DeleteTime;
+    [Header("移動速度")]
+    public float Speed;
+
+    [Header("子彈物件")]
+    public GameObject Bullet;
+    [Header("子彈生成位置")]
+    public GameObject CreateObject;
+    [Header("設定多少時間產生一顆子彈")]
+    public float SetTime;
+    // Start is called before the first frame update
+    void Start()
+    {
+        Destroy(gameObject, DeleteTime);
+        //InvokeRepeating(fuc名稱,第一次等待秒數,固定等待秒數)
+        InvokeRepeating("CreateBullet", SetTime, SetTime);
+    }
+
+    void CreateBullet()
+    {
+        Instantiate(Bullet, CreateObject.transform.position, CreateObject.transform.rotation);
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        transform.Translate(Vector3.up * Speed * Time.deltaTime);
+    }
+}
+GameOver:
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using System.IO;
+
+public class GameOver : MonoBehaviour
+{
+    [Header("目標分數文字")]
+    public Text AimScoreText;
+    [Header("得分數文字")]
+    public Text ScoreText;
+    [Header("下一關的按鈕")]
+    public Button NextButton;
+    string LevelAimScore = "LevelAimScore";
+
+
+    public string[] TextLines;
+    public List<string> TextScoreLines;
+    public List<string> TextNameLines;
+
+    public int LevelID;
+    public string[] TextLevelID;
+
+
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        AimScoreText.text = "目標得分數:" + PlayerPrefs.GetInt(LevelAimScore);
+        ScoreText.text = "得分數:" + Camera.main.GetComponent<GM>().TotalScore;
+
+        string Path = "Assets/Resources/SetLevel.txt";
+        /*StreamReader reader = new StreamReader(Path);
+        Debug.Log(reader.ReadToEnd());
+        reader.Close();*/
+
+        TextLines = File.ReadAllLines(Path);
+        TextScoreLines.Clear();
+        TextNameLines.Clear();
+        for (int i = 0; i < TextLines.Length; i++)
+        {
+            if(TextLines[i] != "")
+            {
+                string[] lines = TextLines[i].Split('@');
+                TextScoreLines.Add(lines[1]);
+                TextNameLines.Add(lines[0]);
+            }
+        }
+
+
+        string LevelIDPath = "Assets/Resources/levelID.txt";
+        TextLevelID = File.ReadAllLines(LevelIDPath);
+        LevelID = int.Parse(TextLevelID[0]);
+    }
+
+
+    public void Regame()
+    {
+        Application.LoadLevel(Application.loadedLevel);
+    }
+    public void NextGame()
+    {
+        if(LevelID - Staticvar.ClickLevelID == 1)
+        {
+            LevelID++;
+            PlayerPrefs.SetInt(LevelAimScore, int.Parse(TextScoreLines[LevelID - 1]));
+            DeleteText();
+            WriteString();
+        }
+        else
+        {
+            Staticvar.ClickLevelID++;
+            PlayerPrefs.SetInt(LevelAimScore, int.Parse(TextScoreLines[Staticvar.ClickLevelID]));
+        }
+        Application.LoadLevel(Application.loadedLevel);
+    }
+    public void DeleteText()
+    {
+        string path = "Assets/Resources/levelID.txt";
+        File.WriteAllText(path, string.Empty);
+    }
+    public void WriteString()
+    {
+        string path = "Assets/Resources/levelID.txt";
+        StreamWriter writer = new StreamWriter(path, true);
+        writer.WriteLine(LevelID + "");
+        writer.Close();
+    }
+    public void backMenu()
+    {
+        /*if (LevelID - Staticvar.ClickLevelID == 1)
+        {
+            LevelID++;
+            PlayerPrefs.SetInt(LevelAimScore, int.Parse(TextScoreLines[LevelID - 1]));
+            DeleteText();
+            WriteString();
+        }
+        else
+        {
+            Staticvar.ClickLevelID++;
+            PlayerPrefs.SetInt(LevelAimScore, int.Parse(TextScoreLines[Staticvar.ClickLevelID]));
+        }*/
+        Application.LoadLevel(Application.loadedLevel);
+    }
+
+}
+Joy stick:
+using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.EventSystems;
+
+public class FixedJoystickHandler : MonoBehaviour, IDragHandler, IEndDragHandler, IBeginDragHandler
+{
+
+    //[System.Serializable]
+    //public class VirtualJoystickEvent : UnityEvent<Vector3> { }
+
+    public Transform content;
+    public UnityEvent beginControl;
+    public UnityEvent<Vector3> controlling;
+    public UnityEvent endControl;
+
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+
+        this.beginControl.Invoke();
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+
+        if (this.content)
+        {
+
+            this.controlling.Invoke(this.content.localPosition.normalized);
+        }
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+
+        this.endControl.Invoke();
+    }
+}
+
+using UnityEngine;
+using System.Collections;
+using UnityEngine.UI;
+
+public class ScrollCircle : ScrollRect
+{
+    protected float mRadius = 0f;
+
+    protected override void Start()
+    {
+        base.Start();
+        mRadius = (transform as RectTransform).sizeDelta.x * 0.5f;
+    }
+
+    public override void OnDrag(UnityEngine.EventSystems.PointerEventData eventData)
+    {
+        base.OnDrag(eventData);
+        var contentPostion = this.content.anchoredPosition;
+        if (contentPostion.magnitude > mRadius)
+        {
+            contentPostion = contentPostion.normalized * mRadius;
+            SetContentAnchoredPosition(contentPostion);
+        }
+    }
+}
+
+
